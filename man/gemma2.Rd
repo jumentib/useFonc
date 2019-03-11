@@ -7,7 +7,7 @@
 gemma2(geno, pheno, map, covar = NULL, gemma.exe = "./gemma.macosx",
   opt.mat = c(1, 2), met.reg = c("lmm", "bslmm"), lmm = c(1, 2, 3,
   4), bslmm = c(1, 2, 3), pmin = 0.01, pmax = 0.05,
-  opt.bs = "-w  10000 -s  10000")
+  opt.bs = "-w  10000 -s  10000", smax = 300)
 }
 \arguments{
 \item{geno}{: genotype --> one row per SNP, and one column per sample.}
@@ -33,6 +33,8 @@ gemma2(geno, pheno, map, covar = NULL, gemma.exe = "./gemma.macosx",
 \item{pmax}{: for bslmm : max no zero proportion of beta (pi)}
 
 \item{opt.bs}{: option for bslmm : w and s default as in Zeng 2017 (10000 for both)}
+
+\item{smax}{: Number of variants with sparse effects (~ number of major effect loci). Default to 300 like in gemma}
 
 \item{three}{columns: (1) SNP label, (2) base-pair position, (3) chromosome.}
 }
