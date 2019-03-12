@@ -1089,3 +1089,108 @@ rbind.na <- function (..., deparse.level = 1)
   }
   r
 }
+
+#' RMSE : Calcul Root Square Mean Error
+#'
+#' @param beta : effect from a linear regression
+#' @param true : true effect from a simulation
+#'
+#' @return the RMSE
+#'
+#' @export
+RMSE <- function(beta, true.beta) {
+  return(sqrt(mean((true.beta - beta)^2)))
+}
+
+#' F1 : Calcul F1 score for a simulation (on effect sizes)
+#'
+#' @param beta : effect from a regression
+#' @param causal : true causal variable (SNP or CpG)
+#' @param nb.hit : number of first hit for calculate the F1 score
+#'
+#' @return the F1 score, the precision and the recall
+#'
+#' @export
+F1 <- function(beta, causal, nb.hit = 10) {
+  abs.beta <- abs(beta)
+  p <- length(beta)
+  # create list for F1
+  first.hit <- order(abs.beta, decreasing = T)[1:nb.hit]
+  last.hit <- order(abs.beta, decreasing = T)[(nb.hit + 1):p]
+  # F1 score
+  tp <- sum(first.hit %in% causal)
+  fp <- sum(!(first.hit %in% causal))
+  fn <- sum(causal %in% last.hit)
+
+  preci <- tp / (tp + fp)
+  recal <- tp / (tp + fn)
+
+  f1 <- 2 * (preci * recal) / (preci + recal)
+
+  preci <- ifelse(is.na(preci), 0, preci)
+  recal <- ifelse(is.na(recal), 0, recal)
+  f1 <- ifelse(is.na(f1), 0, f1)
+
+  return(list(f1 = f1, precision = preci, recall = recal))
+}
+
+#' F1.LD : Calcul F1 score for a simulation (on effect sizes), take in account the linkage desequilibrum
+#'
+#' @param beta : effect from a regression
+#' @param causal : true causal variable (SNP or CpG)
+#' @param nb.hit : number of first hit for calculate the F1 score
+#'
+#' @return the F1 score, the precision and the recall
+#'
+#' @export
+F1.LD <- function(beta, causal, nb.hit, neighbour.c = 50, neighbour.p = 50) {
+
+  pos <- sort(order(abs(beta), decreasing = T)[1:nb.hit])
+
+  # proche voisin
+  pN <- NULL
+  for (i in pos) {
+    ai <- i
+    a1 <- ai - neighbour.c
+    a2 <- ai + neighbour.c
+    pN <- c(pN, a1:a2)
+  }
+  pN <- unique(sort(pN))
+
+  ###### Compter le nombre de pique
+
+  NbP <- NULL
+  for (j in 1:length(pos)) {
+    pos1 <- pos[j]
+    pos2 <- pos[j + 1]
+
+    pos50 <- pos1:(pos1 + neighbour.p)
+
+    if ((pos1 %in% pos50) & (pos2 %in% pos50)) {
+      NbP <- c(NbP, 0)
+    }
+    else {NbP <- c(NbP, 1)}
+  }
+
+  np <- sum(NbP)
+
+  # TP oui ou non
+  tp <- sum(pN %in% causal)
+  # FP oui ou non
+  fp <- np - tp
+  fp <- ifelse(fp < 0, 0, fp)
+  # FN oui ou non
+  fn <- sum(!(causal %in% pN))
+
+  preci <- tp / (tp + fp)
+  recal <- tp / (tp + fn)
+
+  f1 <- 2 * (preci * recal) / (preci + recal)
+
+  preci <- ifelse(is.na(preci), 0, preci)
+  recal <- ifelse(is.na(recal), 0, recal)
+  f1 <- ifelse(is.na(f1), 0, f1)
+
+  return(list(f1 = f1, precision = preci, recall = recal))
+}
+

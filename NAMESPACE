@@ -2,6 +2,9 @@
 
 S3method(cbind,na)
 S3method(rbind,na)
+export(F1)
+export(F1.LD)
+export(RMSE)
 export(cor.ld)
 export(cor.ld.pas)
 export(cor.paired)
