@@ -27,13 +27,19 @@ auc.max : the maximum AUC for a perfect model
 
 auc.norm : auc/auc.max. Normalization of the AUC of the rank power curve
 
-power : statistical power of the test
+precision : statistical precision of the test : TP / (TP + FP)
 
-recall : statistical recall of the test
+recall : statistical recall of the test : TP / (TP + FN)
 
-f1_score : F1 Score of the test
+f1_score : F1 Score of the test : 2(Pre * Rec) / (Pre + Rec)
 
-length.list : number of pValues lower than "ral".
+length.list : number of pValues lower than "ral" (Bonferroni correction).
+
+TP : True positive
+
+FP : False positive
+
+FN : False negative
 }
 \description{
 rank.pwer : Calculate the power and the calibration of statiscal test (for simulation)

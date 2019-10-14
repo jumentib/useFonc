@@ -414,6 +414,46 @@ med.test <- function(mv, iv, dv, cof = NULL) {
 
 }
 
+#' sob.parallel : The Sobel mediation test for high dimension
+#'
+#' @description
+#'
+#' To compute statistics and p-values for the Sobel test. Results for
+#' three versions of "Sobel test" are provided: Sobel test, Aroian test and Goodman test.
+#' Function adapt from package "bda". (for covariable)
+#'
+#' @param X exposure
+#' @param Y outcome
+#' @param M methylation matrix
+#' @param conf latent factors
+#' @param nb.core number of core used (parallel)
+#' @return pValue et score for Sobel test, Aroian test and Goodman test.
+#'
+#' @details
+#'
+#' To test whether a mediator carries the influence on an IV to a DV.
+#' Missing values are not allowed.
+#'
+#' @export
+sob.parallel <- function(X, Y, M, conf = NULL, nb.core = 2) {
+  p <- ncol(M)
+  med <- function(i) {
+    # argument
+    if (is.null(conf)) {
+      res <- med.test(mv = M[, i], iv = X, dv = Y, cof = NULL)
+    }
+    else {
+      res <- med.test(mv = M[, i], iv = X, dv = Y, cof = conf)
+    }
+
+    return(data.frame(pv.sobel = res[2, 1], pv.aroian = res[2, 3], pv.goodman = res[2, 3],
+                      zv.sobel = res[1, 1], zv.aroian = res[1, 3], zv.goodman = res[1, 3]))
+  }
+  return(do.call("rbind", mclapply(1:p, med, mc.cores = nb.core)))
+}
+
+
+
 #' rank.pwer : Calculate the power and the calibration of statiscal test (for simulation)
 #'
 #' @param pval pValues from a test
@@ -425,10 +465,13 @@ med.test <- function(mv, iv, dv, cof = NULL) {
 #' @return auc : the AUC of the rank power curve
 #' @return auc.max : the maximum AUC for a perfect model
 #' @return auc.norm : auc/auc.max. Normalization of the AUC of the rank power curve
-#' @return power : statistical power of the test
-#' @return recall : statistical recall of the test
-#' @return f1_score : F1 Score of the test
-#' @return length.list : number of pValues lower than "ral".
+#' @return precision : statistical precision of the test : TP / (TP + FP)
+#' @return recall : statistical recall of the test : TP / (TP + FN)
+#' @return f1_score : F1 Score of the test : 2(Pre * Rec) / (Pre + Rec)
+#' @return length.list : number of pValues lower than "ral" (Bonferroni correction).
+#' @return TP : True positive
+#' @return FP : False positive
+#' @return FN : False negative
 #'
 #' @details
 #'
@@ -458,22 +501,29 @@ rank.pwer <- function(pval,known.mediator=NULL,toplist=20, decreasing = F, ral =
   auc.max <- sum(c(1:NH,rep(NH,toplist-NH)))
 
   al <- ral/length(pval)
-  ls.pv <- which(pval < al)
-  # power
-  pow <- sum(ls.pv %in% known.mediator)/length(known.mediator)
-  # recall
-  rec <- sum(known.mediator %in% ls.pv)/length(ls.pv)
+  pos <- which(pval <= al)
+  neg <- which(pval > al)
+
+  TP <- sum(pos %in% causal)
+  FP <- sum(!(pos %in% causal))
+  FN <- sum(neg %in% causal)
+
+  pre <- TP / (TP + FP)
+  rec <- TP / (TP + FN)
   # taille de list
-  l.pv <- length(ls.pv)
+  l.pv <- length(pos)
 
   return(list(auc  = auc,
               cur  = cur,
               auc.norm = auc/auc.max,
               auc.max  = auc.max,
-              power = pow,
+              precision = pre,
               recall = rec,
-              f1_score = 2*rec*pow/(rec + pow),
-              length.list = l.pv))
+              f1_score = 2*rec*pre/(rec + pre),
+              length.list = l.pv,
+              TP = TP,
+              FP = FP,
+              FN = FN))
 }
 
 
@@ -1194,3 +1244,373 @@ F1.LD <- function(beta, causal, nb.hit, neighbour.c = 50, neighbour.p = 50) {
   return(list(f1 = f1, precision = preci, recall = recal))
 }
 
+
+#' F1.SCORE.FOR.HIMA : F1 score for HIMA package (for simulation)
+#'
+#' @param hima.data data of hima
+#' @param causal true result of the simulation
+#' @param M matrix of methylation
+#' @return precision : statistical precision of the test : TP / (TP + FP)
+#' @return recall : statistical recall of the test : TP / (TP + FN)
+#' @return f1_score : F1 Score of the test : 2(Pre * Rec) / (Pre + Rec)
+#' @return length.list : number of pValues lower than "ral" (Bonferroni correction).
+#' @return TP : True positive
+#' @return FP : False positive
+#' @return FN : False negative
+#'
+#' @details
+#'
+#' F1 = 2*recall*power/(recall + power)
+#' @export
+F1.SCORE.FOR.HIMA <- function(hima.data, causal, M = NULL) {
+  pos <- as.numeric(gsub("`", "", row.names(him)))
+  neg <- (1:ncol(M))[-pos]
+
+  TP <- sum(pos %in% causal)
+  FP <- sum(!(pos %in% causal))
+  FN <- sum(neg %in% causal)
+
+  pre <- TP / (TP + FP)
+  rec <- TP / (TP + FN)
+
+  f1_score = 2*rec*pre/(rec + pre)
+
+
+  return(list(precision = pre,
+              recall = rec,
+              f1_score = 2*rec*pre/(rec + pre),
+              length.list = length(pos),
+              TP = TP,
+              FP = FP,
+              FN = FN))
+}
+
+#' r_mediation : function to simulate DNA methylation data for mediation analyzis
+#'
+#' @param n	: number of individuals
+#' @param p	: number of cpg variables
+#' @param K	: number of latent factors
+#' @param freq : (vector) mean methylation values (if NULL, set randomly)
+#' @param prop.causal : proportion of causal variables (probes/loci)
+#' @param prop.causal.x : proportion of causal cpg M -> x
+#' @param prop.causal.y : proportion of causal cpg M -> y
+#' @param prop.causal.ylx : proportion of causal y in causal x
+#' @param prop.variance.y : proportion of phenotypic variance explained by latent structure (intensity of confounding)
+#' @param prop.variance.x : proportion of exposure variance explained by latent structure (intensity of confounding)
+#' @param rho : correlation outcome/exposure (direct effect)
+#' @param sigma :	standard deviation of residual errors
+#' @param sd.B : standard deviation for effect sizes (B: M->Y)
+#' @param mean.B :	(vector) mean of effect sizes
+#' @param sd.A :	standard deviation for effect sizes (A: M->X)
+#' @param mean.A :	(vector) mean of effect sizes
+#' @param sd.U : (vector) standard deviations for factors
+#' @param sd.V : standard deviations for loadings
+#'
+#' @return M : matrix of methylation beta values
+#' @return Y : phenotype/health outcome
+#' @return B : effect sizes phenotype/health outcome
+#' @return X : exposure
+#' @return A : effect sizes exposure
+#' @return mediators : set of true mediators
+#' @return causal.x : set of CpGs associated with the exposure
+#' @return causal.y : set of CpGs associated with the outcome
+#' @return U : simulated confounders
+#' @return V : loadings of coufounders
+#' @return freq : mean methylation values
+#' @return controls : true control gene (NOT USE for simulation study)
+#'
+#' @details
+#'
+#' This function is used to simulate datasets for analysis of mediations.
+#' The simulation model is based on linear relationships.
+#' First, it construct a covariance matrix for X, Y and U using the parameter rho
+#' (direct effect or correlation between X and Y) and propvar
+#' (intensity of the confounders or correlation between Y and U).
+#' Then this matrix is used to simulate via normal laws X, Y and U.
+#' Thereafter, the effect sizes of X (A), Y (B) and U (V) are calculated
+#' using mean parameters of effect sizes (meanA and meanB) and standard deviations (sdA, sdB and sdV).
+#' Note that the effect sizes of X and Y are calculated only for causal mediators with X and/or Y.
+#' For non-causal mediators, the effect sizes is 0.
+#' On the other hand, a residual error matrix is calculated via the sigma (Z) parameter.
+#' To finish the methylation matrix is calculated thanks to the formula : M = V*U + A*X + B*Y + Z
+#' @examples
+#' # Simulate data :
+#' simu <- r_mediation(100, 500, 5)
+#' @export
+r_mediation <- function(n,
+                        p,
+                        K,
+                        freq = NULL,
+                        prop.causal.x = 0.010,
+                        prop.causal.y = 0.010,
+                        prop.causal.ylx = 0.5,
+                        prop.variance.y = 0.6,
+                        prop.variance.x = 0.2,
+                        rho = 0.2,
+                        sigma = 0.2,
+                        sd.A = 1.0,
+                        mean.A = 3.0,
+                        sd.B = 1.0,
+                        mean.B = 5.0,
+                        sd.U = 1.0,
+                        sd.V = 1.0)
+{
+  causal.x <- sample.int(p, prop.causal.x * p)
+  causal.ylx <- sample(causal.x , prop.causal.ylx*length(causal.x))
+  if (prop.causal.y * p < prop.causal.ylx*length(causal.x)) {
+    stop("# causal y < # mediators")
+  }
+  else {
+    causal.y <- c(causal.ylx, sample.int(p, prop.causal.y * p - prop.causal.ylx*length(causal.x)) )
+  }
+  x.nb = length(causal.x)
+  y.nb = length(causal.y)
+
+  if (is.null(freq)) freq <- runif(n = p,min =  0.2,max =  0.8) # mean of methylation for each site
+
+  if (prop.variance.y + rho^2 > 1) stop("prop.variance.y + rho^2 > 1")
+  if (prop.variance.x + rho^2 > 1) stop("prop.variance.x + rho^2 > 1")
+
+  #cs <- runif(K, min = -1, max = 1)
+  #theta.y <- sqrt( prop.variance.y /sum((cs/sd.U)^2) )
+  #theta.x <- sqrt( prop.variance.x /sum((cs/sd.U)^2) )
+
+  cs.y <- runif(K, min = -1, max = 1)
+  cs.x <- runif(K, min = -1, max = 1)
+  theta.y <- sqrt( prop.variance.y /sum((cs.y/sd.U)^2) )
+  theta.x <- sqrt( prop.variance.x /sum((cs.x/sd.U)^2) )
+
+  # constructing the covariance matrix
+  Sigma <- diag(x = sd.U^2, nrow = K, ncol = K)
+
+  Sigma <- rbind(Sigma, matrix(cs.y*theta.y, nrow = 1))
+  Sigma <- rbind(Sigma, matrix(cs.x*theta.x, nrow = 1))
+
+  Sigma <- cbind(Sigma, matrix(c(cs.y*theta.y, 1, rho), ncol = 1))
+  Sigma <- cbind(Sigma, matrix(c(cs.x*theta.x, rho, 1), ncol = 1))
+
+  UYX <- MASS::mvrnorm(n, mu = rep(0, K + 2), Sigma = Sigma)
+  U <- UYX[, 1:K, drop = FALSE]   # confounders
+  Y <- UYX[, K + 1, drop = FALSE] # outcome
+  X <- UYX[, K + 2, drop = FALSE] # exposure
+
+  V <- MASS::mvrnorm(p, mu = rep(0, K), Sigma = sd.V^2 * diag(K))
+
+  A <- matrix(0, p, 1)
+  A[causal.x, 1] <- rnorm(x.nb, mean.A, sd.A)
+
+  B <- matrix(0, p, 1)
+  B[causal.y, 1] <- rnorm(y.nb, mean.B, sd.B)
+
+  Epsilon <- apply(matrix(rep(0,p),nrow = 1), 2, function(x) rnorm(n,x,sigma))
+
+  Z = U %*% t(V) + X %*% t(A) + Y %*% t(B) + Epsilon
+
+  M = matrix(rep(qnorm(freq),n), nrow = n, byrow = T) + Z
+
+  M = pnorm(M)
+
+  return(list(M = M,
+              Y = Y,
+              B = B,
+              X = X,
+              A = A,
+              mediators = sort(causal.ylx),
+              causal.x = sort(causal.x),
+              causal.y = sort(causal.y),
+              U = U,
+              V = V,
+              freq = freq,
+              Sigma = Sigma,
+              controls = !(1:p %in% unique(sort(c(sort(causal.x),sort(causal.y)))))))
+}
+
+#' refactor2 : fonction refactor
+#'
+#' @param data methylation matrix
+#' @param k number of K
+#' @param covar covariables
+#' @param t number of of CpGs for the estimation of latent factor
+#' @param numcomp like K
+#' @param stdth sites were excluded due to low variance
+#'
+#'
+#' @details
+#'
+#' see refactor paper
+#' @export
+refactor2 <- function(data, k, covar = NULL, t = 500, numcomp = NULL, stdth = 0.02) {
+
+  #ranked_filename = paste(out, ".out.rankedlist.txt", sep="")
+  #components_filename = paste(out, ".out.components.txt", sep="")
+
+  # print('Starting ReFACTor v1.0...');
+
+  # print('Reading input files...');
+
+  O <- as.matrix(data)
+  # sample_id <- O[1, -1] # extract samples ID
+  # O <- O[-1,] # remove sample ID from matrix
+  # cpgnames <- O[, 1] ## set rownames
+  # O <- O[, -1]
+  # O = matrix(as.numeric(O),nrow=nrow(O),ncol=ncol(O))
+  #
+  # print(paste("Excluding sites with low variance (std < ", stdth, ")..."), sep="")
+  sds <- apply(t(O), 2, sd)
+  m_before <- length(sds)
+  include <- which(sds >= stdth)
+  O <- O[include,]
+  # cpgnames = cpgnames[include]
+  # print(paste((m_before - length(which(sds >= stdth))), " sites were excluded due to low variance...", sep=""))
+
+  if (is.null(numcomp) || is.na(numcomp))
+  {
+    numcomp <- k
+  }
+
+  # Adjust the data for the covariates
+  if (!is.null(covar))
+  {
+    covs <- as.matrix(covar)
+    # sample_id2 <- covs[, 1]
+    # if (!all(sample_id == sample_id2)){
+    #   print("ERROR: The order of the samples in the covariates file must be the same as the order in the data file")
+    #   quit()
+    # }
+    # covs <- covs[,-1]
+    if (length(covs) > dim(O)[2])
+    {
+      covs <- matrix(as.numeric(covs), nrow = nrow(covs), ncol = ncol(covs))
+    }else{
+      covs <- as.numeric(covs)
+    }
+    O_adj <- O
+    for (site in 1:nrow(O))
+    {
+      model <- lm(O[site,] ~  covs)
+      O_adj[site,] <- residuals(model)
+    }
+    O <- O_adj
+  }
+
+  # print('Running a standard PCA...')
+  pcs <- prcomp(scale(t(O)))
+
+  coeff <- pcs$rotation
+  score <- pcs$x
+
+  # print('Compute a low rank approximation of input data and rank sites...')
+  x <- score[,1:k] %*% t(coeff[,1:k])
+  An <- scale(t(O), center = T, scale = F)
+  Bn <- scale(x, center = T, scale = F)
+  An <- t(t(An) * (1/sqrt(apply(An^2, 2, sum))))
+  Bn <- t(t(Bn) * (1/sqrt(apply(Bn^2, 2, sum))))
+
+
+  # Find the distance of each site from its low rank approximation.
+  distances <- apply((An-Bn)^2, 2, sum)^0.5
+  dsort <- sort(distances, index.return = T)
+  ranked_list <- dsort$ix
+
+  # print('Compute ReFACTor components...')
+  sites <- ranked_list[1:t]
+  pcs <- prcomp(scale(t(O[sites,])))
+  first_score <- score[,1:k]
+  score <- pcs$x
+
+  #print('Saving a ranked list of the data features...');
+  #write(t(cpgnames[ranked_list]),file=ranked_filename,ncol=1)
+  #write(t(cbind(ranked_list,cpgnames[ranked_list])),file=ranked_filename,ncol=2)
+
+  #print('Saving the ReFACTor components...');
+  #write(t(score[,1:numcomp]), file=components_filename, ncol=numcomp)
+
+  # print('ReFACTor is Done');
+  result <- list(refactor_components = score[, 1:numcomp],
+                 ranked_list = ranked_list,
+                 standard_pca = first_score)
+  return(result)
+
+}
+
+
+#' F1.SCORE.FOR.SPARSE : F1 score for sparse LFMM package (for simulation)
+#'
+#' @param a alpha effect in mediation (sparse_lfmm$B[,1])
+#' @param b beta effect in mediation (sparse_lfmm$B[,2])
+#' @param causal true result of the simulation
+#' @return precision : statistical precision of the test : TP / (TP + FP)
+#' @return recall : statistical recall of the test : TP / (TP + FN)
+#' @return f1_score : F1 Score of the test : 2(Pre * Rec) / (Pre + Rec)
+#' @return length.list : number of pValues lower than "ral" (Bonferroni correction).
+#' @return TP : True positive
+#' @return FP : False positive
+#' @return FN : False negative
+#'
+#' @details
+#' Select the markers with a * b != 0
+#' F1 = 2*recall*power/(recall + power)
+#' @export
+F1.SCORE.FOR.SPARSE <- function(a, b, causal) {
+  pos <- which((a * b) != 0)
+  neg <- (1:length(a))[-pos]
+
+  TP <- sum(pos %in% causal)
+  FP <- sum(!(pos %in% causal))
+  FN <- sum(neg %in% causal)
+
+  pre <- TP / (TP + FP)
+  rec <- TP / (TP + FN)
+
+  f1_score = 2*rec*pre/(rec + pre)
+
+
+  return(list(precision = pre,
+              recall = rec,
+              f1_score = 2*rec*pre/(rec + pre),
+              length.list = length(pos),
+              TP = TP,
+              FP = FP,
+              FN = FN))
+}
+
+
+#' F1.SCORE.FOR.BMA : F1 score for bigmma package (for simulation)
+#'
+#' @param bma result of the data.org.big function
+#' @param causal true result of the simulation
+#' @param M matrix of methylation
+#' @return precision : statistical precision of the test : TP / (TP + FP)
+#' @return recall : statistical recall of the test : TP / (TP + FN)
+#' @return f1_score : F1 Score of the test : 2(Pre * Rec) / (Pre + Rec)
+#' @return length.list : number of pValues lower than "ral" (Bonferroni correction).
+#' @return TP : True positive
+#' @return FP : False positive
+#' @return FN : False negative
+#'
+#' @details
+#'
+#' F1 = 2*recall*power/(recall + power)
+#' @export
+F1.SCORE.FOR.BMA <- function(bma, causal, M = NULL) {
+  pos <- as.numeric(gsub("X", "", summary(bma, only=TRUE)[["mediator"]]))
+  neg <- (1:ncol(M))[-pos]
+
+  TP <- sum(pos %in% causal)
+  FP <- sum(!(pos %in% causal))
+  FN <- sum(neg %in% causal)
+
+  pre <- TP / (TP + FP)
+  rec <- TP / (TP + FN)
+
+  f1_score = 2*rec*pre/(rec + pre)
+
+
+  return(list(precision = pre,
+              recall = rec,
+              f1_score = 2*rec*pre/(rec + pre),
+              length.list = length(pos),
+              TP = TP,
+              FP = FP,
+              FN = FN))
+}
