@@ -504,9 +504,9 @@ rank.pwer <- function(pval,known.mediator=NULL,toplist=20, decreasing = F, ral =
   pos <- which(pval <= al)
   neg <- which(pval > al)
 
-  TP <- sum(pos %in% causal)
-  FP <- sum(!(pos %in% causal))
-  FN <- sum(neg %in% causal)
+  TP <- sum(pos %in% known.mediator)
+  FP <- sum(!(pos %in% known.mediator))
+  FN <- sum(neg %in% known.mediator)
 
   pre <- TP / (TP + FP)
   rec <- TP / (TP + FN)
