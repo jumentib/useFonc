@@ -1263,7 +1263,7 @@ F1.LD <- function(beta, causal, nb.hit, neighbour.c = 50, neighbour.p = 50) {
 #' F1 = 2*recall*power/(recall + power)
 #' @export
 F1.SCORE.FOR.HIMA <- function(hima.data, causal, M = NULL) {
-  pos <- as.numeric(gsub("`", "", row.names(him)))
+  pos <- as.numeric(gsub("`", "", row.names(hima.data)))
   neg <- (1:ncol(M))[-pos]
 
   TP <- sum(pos %in% causal)
