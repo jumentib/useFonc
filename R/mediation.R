@@ -440,3 +440,162 @@ r_mediation_natural <- function(meth = NULL, eff.size.x = 100, eff.size.y = 100,
 }
 
 
+#' r_mediation_cell_type : function to simulate DNA methylation data for mediation analyzis (and cell type)
+#'
+#' @param n	: number of individuals
+#' @param p	: number of cpg variables
+#' @param K	: number of latent factors
+#' @param freq : (vector) mean methylation values (if NULL, set randomly)
+#' @param prop.causal : proportion of causal variables (probes/loci)
+#' @param prop.causal.x : proportion of causal cpg M -> x
+#' @param prop.causal.y : proportion of causal cpg M -> y
+#' @param prop.causal.ylx : proportion of causal y in causal x
+#' @param prop.variance.y : proportion of phenotypic variance explained by latent structure (intensity of confounding)
+#' @param prop.variance.x : proportion of exposure variance explained by latent structure (intensity of confounding)
+#' @param rho : correlation outcome/exposure (direct effect)
+#' @param sigma :	standard deviation of residual errors
+#' @param sd.B : standard deviation for effect sizes (B: M->Y)
+#' @param mean.B :	(vector) mean of effect sizes
+#' @param sd.A :	standard deviation for effect sizes (A: M->X)
+#' @param mean.A :	(vector) mean of effect sizes
+#' @param sd.U : (vector) standard deviations for factors
+#' @param sd.V : standard deviations for loadings
+#' @param K.ct : number of cell type
+#' @param sd.ct : standard deviations for loadings (cell type)
+#' @param alpha : parameter for the dirichlet distribution (for cell type), default : runif(K.ct)
+#'
+#' @return M : matrix of methylation beta values
+#' @return Y : phenotype/health outcome
+#' @return B : effect sizes phenotype/health outcome
+#' @return X : exposure
+#' @return A : effect sizes exposure
+#' @return mediators : set of true mediators
+#' @return causal.x : set of CpGs associated with the exposure
+#' @return causal.y : set of CpGs associated with the outcome
+#' @return U : simulated confounders
+#' @return V : loadings of coufounders
+#' @return freq : mean methylation values
+#' @return controls : true control gene (NOT USE for simulation study)
+#' @return cell_type : proportion of cell type
+#' @retunr tcell_type : loadings of cell type
+#'
+#' @details
+#'
+#' This function is used to simulate datasets for analysis of mediations.
+#' The simulation model is based on linear relationships.
+#' First, it construct a covariance matrix for X, Y and U using the parameter rho
+#' (direct effect or correlation between X and Y) and propvar
+#' (intensity of the confounders or correlation between Y and U).
+#' Then this matrix is used to simulate via normal laws X, Y and U.
+#' Thereafter, the effect sizes of X (A), Y (B) and U (V) are calculated
+#' using mean parameters of effect sizes (meanA and meanB) and standard deviations (sdA, sdB and sdV).
+#' Note that the effect sizes of X and Y are calculated only for causal mediators with X and/or Y.
+#' For non-causal mediators, the effect sizes is 0.
+#' On the other hand, a residual error matrix is calculated via the sigma (Z) parameter.
+#' Cell type is simulate with dirichlet distribution
+#' To finish the methylation matrix is calculated thanks to the formula : M = V*U + A*X + B*Y + Z
+#' @examples
+#' # Simulate data :
+#' simu <- r_mediation(100, 500, 5)
+#' @export
+r_mediation_cell_type <- function(n,
+                                  p,
+                                  K,
+                                  K.ct,
+                                  freq = NULL,
+                                  prop.causal.x = 0.010,
+                                  prop.causal.y = 0.010,
+                                  prop.causal.ylx = 0.5,
+                                  prop.variance.y = 0.6,
+                                  prop.variance.x = 0.2,
+                                  rho = 0.2,
+                                  sigma = 0.2,
+                                  sd.A = 1.0,
+                                  mean.A = 3.0,
+                                  sd.B = 1.0,
+                                  mean.B = 5.0,
+                                  sd.U = 1.0,
+                                  sd.V = 1.0,
+                                  sd.ct = 1.0,
+                                  alpha = NULL)
+{
+  causal.x <- sample.int(p, prop.causal.x * p)
+  causal.ylx <- sample(causal.x , prop.causal.ylx*length(causal.x))
+  if (prop.causal.y * p < prop.causal.ylx*length(causal.x)) {
+    stop("# causal y < # mediators")
+  }
+  else {
+    causal.y <- c(causal.ylx, sample.int(p, prop.causal.y * p - prop.causal.ylx*length(causal.x)) )
+  }
+  x.nb = length(causal.x)
+  y.nb = length(causal.y)
+
+  if (is.null(freq)) freq <- runif(n = p,min =  0.2,max =  0.8) # mean of methylation for each site
+
+  if (prop.variance.y + rho^2 > 1) stop("prop.variance.y + rho^2 > 1")
+  if (prop.variance.x + rho^2 > 1) stop("prop.variance.x + rho^2 > 1")
+
+  #cs <- runif(K, min = -1, max = 1)
+  #theta.y <- sqrt( prop.variance.y /sum((cs/sd.U)^2) )
+  #theta.x <- sqrt( prop.variance.x /sum((cs/sd.U)^2) )
+
+  cs.y <- runif(K, min = -1, max = 1)
+  cs.x <- runif(K, min = -1, max = 1)
+  theta.y <- sqrt( prop.variance.y /sum((cs.y/sd.U)^2) )
+  theta.x <- sqrt( prop.variance.x /sum((cs.x/sd.U)^2) )
+
+  # constructing the covariance matrix
+  Sigma <- diag(x = sd.U^2, nrow = K, ncol = K)
+
+  Sigma <- rbind(Sigma, matrix(cs.y*theta.y, nrow = 1))
+  Sigma <- rbind(Sigma, matrix(cs.x*theta.x, nrow = 1))
+
+  Sigma <- cbind(Sigma, matrix(c(cs.y*theta.y, 1, rho), ncol = 1))
+  Sigma <- cbind(Sigma, matrix(c(cs.x*theta.x, rho, 1), ncol = 1))
+
+  UYX <- MASS::mvrnorm(n, mu = rep(0, K + 2), Sigma = Sigma)
+  U <- UYX[, 1:K, drop = FALSE]   # confounders
+  Y <- UYX[, K + 1, drop = FALSE] # outcome
+  X <- UYX[, K + 2, drop = FALSE] # exposure
+
+  V <- MASS::mvrnorm(p, mu = rep(0, K), Sigma = sd.V^2 * diag(K))
+
+  A <- matrix(0, p, 1)
+  A[causal.x, 1] <- rnorm(x.nb, mean.A, sd.A)
+
+  B <- matrix(0, p, 1)
+  B[causal.y, 1] <- rnorm(y.nb, mean.B, sd.B)
+
+  Epsilon <- apply(matrix(rep(0,p),nrow = 1), 2, function(x) rnorm(n,x,sigma))
+
+  # rajout cell type
+  if (is.null(alpha)) {
+    alpha <- runif(K.ct)
+  }
+
+  a <- qnorm(gtools::rdirichlet(n = n, alpha = alpha))
+  ta <- Rfast::rmvnorm(p, mu = rep(0, K.ct), sigma = sd.ct^2 * diag(K.ct))
+
+
+  Z = U %*% t(V) + a %*% t(ta) + X %*% t(A) + Y %*% t(B) + Epsilon
+
+  M = matrix(rep(qnorm(freq),n), nrow = n, byrow = T) + Z
+
+  M = pnorm(M)
+
+  return(list(M = M,
+              Y = Y,
+              B = B,
+              X = X,
+              A = A,
+              cell_type = a,
+              tcell_type = ta,
+              mediators = sort(causal.ylx),
+              causal.x = sort(causal.x),
+              causal.y = sort(causal.y),
+              U = U,
+              V = V,
+              freq = freq,
+              Sigma = Sigma,
+              controls = !(1:p %in% unique(sort(c(sort(causal.x),sort(causal.y)))))))
+}
