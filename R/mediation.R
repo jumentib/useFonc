@@ -496,7 +496,7 @@ r_mediation_natural <- function(meth = NULL, eff.size.x = 100, eff.size.y = 100,
 #' To finish the methylation matrix is calculated thanks to the formula : M = V*U + A*X + B*Y + Z
 #' @examples
 #' # Simulate data :
-#' simu <- r_mediation(100, 500, 5)
+#' simu <- r_mediation_cell_type(100, 500, 2, 5)
 #' @export
 r_mediation_cell_type <- function(n,
                                   p,
