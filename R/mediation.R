@@ -477,7 +477,7 @@ r_mediation_natural <- function(meth = NULL, eff.size.x = 100, eff.size.y = 100,
 #' @return freq : mean methylation values
 #' @return controls : true control gene (NOT USE for simulation study)
 #' @return cell_type : proportion of cell type
-#' @retunr tcell_type : loadings of cell type
+#' @return  tcell_type : loadings of cell type
 #'
 #' @details
 #'

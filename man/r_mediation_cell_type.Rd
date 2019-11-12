@@ -79,6 +79,8 @@ freq : mean methylation values
 controls : true control gene (NOT USE for simulation study)
 
 cell_type : proportion of cell type
+
+tcell_type : loadings of cell type
 }
 \description{
 r_mediation_cell_type : function to simulate DNA methylation data for mediation analyzis (and cell type)
@@ -100,5 +102,5 @@ To finish the methylation matrix is calculated thanks to the formula : M = V*U +
 }
 \examples{
 # Simulate data :
-simu <- r_mediation(100, 500, 5)
+simu <- r_mediation_cell_type(100, 500, 2, 5)
 }
