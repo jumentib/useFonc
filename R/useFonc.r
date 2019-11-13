@@ -946,3 +946,44 @@ F1.SCORE.FOR.BMA <- function(bma, causal, M = NULL) {
               FP = FP,
               FN = FN))
 }
+
+#' colSD : SD for each column of a matrix
+#'
+#' @param matrix a matrix
+#' @return sd for each column
+#'
+#' @export
+colSD <- function(matrix) {
+  apply(matrix, 2, function(x) sd(x, na.rm = T))
+}
+
+#' rowSD : SD for each row of a matrix
+#'
+#' @param matrix a matrix
+#' @return sd for each row
+#'
+#' @export
+rowSD <- function(matrix) {
+  apply(matrix, 1, function(x) sd(x, na.rm = T))
+}
+
+#' colVar : variance for each column of a matrix
+#'
+#' @param matrix a matrix
+#' @return variance for each column
+#'
+#' @export
+colVar <- function(matrix) {
+  apply(matrix, 2, function(x) var(x, na.rm = T))
+}
+
+#' rowVar : variance for each row of a matrix
+#'
+#' @param matrix a matrix
+#' @return variance for each row
+#'
+#' @export
+rowVar <- function(matrix) {
+  apply(matrix, 1, function(x) var(x, na.rm = T))
+}
+
