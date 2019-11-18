@@ -620,7 +620,7 @@ bin <- function(x, prop = 0.5) {
 }
 
 
-#' r_mediation_cell_type : function to simulate DNA methylation data for mediation analyzis (and cell type)
+#' r_mediation_real_cell_type : function to simulate DNA methylation data for mediation analyzis (and cell type)
 #'
 #' @param CT : Cell type proportion. null by default. You can use real data (n * K.ct matrix)
 #' @param CT.l : Cell type loading. null by default. You can use real data (K.ct * p matrix)

@@ -2,7 +2,7 @@
 % Please edit documentation in R/mediation.R
 \name{r_mediation_real_cell_type}
 \alias{r_mediation_real_cell_type}
-\title{r_mediation_cell_type : function to simulate DNA methylation data for mediation analyzis (and cell type)}
+\title{r_mediation_real_cell_type : function to simulate DNA methylation data for mediation analyzis (and cell type)}
 \usage{
 r_mediation_real_cell_type(CT = NULL, CT.l = NULL, n = nrow(CT),
   p = ncol(CT.l), K = 2, K.ct = 5, freq = NULL,
@@ -97,7 +97,7 @@ freq : mean methylation values
 controls : true control gene (NOT USE for simulation study)
 }
 \description{
-r_mediation_cell_type : function to simulate DNA methylation data for mediation analyzis (and cell type)
+r_mediation_real_cell_type : function to simulate DNA methylation data for mediation analyzis (and cell type)
 }
 \details{
 This function is used to simulate datasets for analysis of mediations.
